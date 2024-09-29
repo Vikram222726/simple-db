@@ -18,6 +18,9 @@ typedef enum
 typedef enum {
     PREPARE_SUCCESS,
     PREPARE_SYNTAX_ERROR,
+    PREPARE_INVALID_ID,
+    PREPARE_USERNAME_TOO_LONG,
+    PREPARE_EMAIL_TOO_LONG,
     PREPARE_UNRECOGNIZED_STATEMENT
 } PrepareResult;
 
@@ -41,8 +44,9 @@ typedef struct {
 
 typedef struct {
     uint32_t id;
-    char username[MAX_USERNAME_CHAR];
-    char email[MAX_EMAIL_CHAR];
+    // Extra 1 char will be used for assigning NULL character to a string in C.
+    char username[MAX_USERNAME_CHAR + 1];
+    char email[MAX_EMAIL_CHAR + 1];
 } Row;
 
 typedef struct {
@@ -189,11 +193,36 @@ PrepareResult prepare_statment(InputBuffer* input_buffer,Statement* statement){
     if(strncmp(input_buffer->buffer, "insert", 6) == 0){
         statement->type = STATEMENT_INSERT;
 
-        uint32_t result = sscanf(input_buffer->buffer, "insert %d %s %s", &(statement->row_data.id), statement->row_data.username, statement->row_data.email);
-        if (result < 3)
-        {
+        char* keyword = strtok(input_buffer->buffer, " ");
+        char* id_string = strtok(NULL, " ");
+        char* username = strtok(NULL, " ");
+        char *email = strtok(NULL, " ");
+
+        if(id_string == NULL || username == NULL || email == NULL){
             return PREPARE_SYNTAX_ERROR;
         }
+
+        int id = atoi(id_string);
+        if (id < 0)
+        {
+            return PREPARE_INVALID_ID;
+        }
+
+        if(strlen(username) > MAX_USERNAME_CHAR){
+            return PREPARE_USERNAME_TOO_LONG;
+        }
+        if(strlen(email) > MAX_EMAIL_CHAR){
+            return PREPARE_EMAIL_TOO_LONG;
+        }
+
+        statement->row_data.id = id;
+        strcpy(statement->row_data.username, username);
+        strcpy(statement->row_data.email, email);
+        // uint32_t result = sscanf(input_buffer->buffer, "insert %d %s %s", &(statement->row_data.id), statement->row_data.username, statement->row_data.email);
+        // if (result < 3)
+        // {
+        //     return PREPARE_SYNTAX_ERROR;
+        // }
 
         return PREPARE_SUCCESS;
     }else if(strncmp(input_buffer->buffer, "select", 6) == 0){
@@ -225,6 +254,15 @@ int main(){
         switch(prepare_statment(input_buffer, &statement)){
             case (PREPARE_SUCCESS):
                 break;
+            case (PREPARE_INVALID_ID):
+                printf("Error: Invalid userId! \n");
+                continue;
+            case (PREPARE_USERNAME_TOO_LONG):
+                printf("Error: Username character length is too long! \n");
+                continue;
+            case (PREPARE_EMAIL_TOO_LONG):
+                printf("Error: Email character length is too long! \n");
+                continue;
             case (PREPARE_SYNTAX_ERROR):
                 printf("Syntax Error! Could not parse statement: %s \n", input_buffer->buffer);
                 continue;
