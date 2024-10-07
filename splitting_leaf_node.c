@@ -434,6 +434,46 @@ Cursor* leaf_node_find(Table* table, uint32_t page_num, uint32_t key_to_insert){
     return cursor;
 }
 
+Cursor* internal_node_find(Table* table, uint32_t page_num, uint32_t key){
+    void *internal_node = get_page(table->pager, page_num);
+    uint32_t num_keys_node = *(internal_node_num_keys(internal_node));
+    uint32_t min_key_id = 0, max_key_id = num_keys_node;
+
+    while(min_key_id != max_key_id){
+        uint32_t mid_key_id = (min_key_id + max_key_id) / 2;
+        uint32_t cell_key_val = *(internal_node_key(internal_node, mid_key_id));
+
+        if(cell_key_val == key){
+            break;
+        }else if(cell_key_val > key){
+            max_key_id = mid_key_id;
+        }else{
+            min_key_id = mid_key_id + 1;
+        }
+    }
+
+    uint32_t max_key_in_node = *(internal_node_key(internal_node, num_keys_node - 1));
+    uint32_t child_page_num;
+    if (key > max_key_in_node)
+    {
+        // That means it's should point to the right most child node 
+        // whose page num is stored in internal node header..
+        child_page_num = *(internal_node_right_child(internal_node));
+    }else{
+        child_page_num = *(internal_node_child(internal_node, min_key_id));
+    }
+
+    void *child_node = get_page(table->pager, child_page_num);
+    // Get child node's pointer and based on whether child node is Leaf or Internal
+    // call the corresponding leaf_node_find or recursive internal_node_find fn.
+    switch(get_node_type(child_node)){
+        case NODE_LEAF:
+            return leaf_node_find(table, child_page_num, key);
+        case NODE_INTERNAL:
+            return internal_node_find(table, child_page_num, key);
+        }
+}
+
 Cursor* table_find(Table* table,uint32_t key_to_insert){
     void *node = get_page(table->pager, table->root_page_num);
 
@@ -441,8 +481,7 @@ Cursor* table_find(Table* table,uint32_t key_to_insert){
     if(node_type == NODE_LEAF){
         return leaf_node_find(table, table->root_page_num, key_to_insert);
     }else {
-        printf("Implement logic for routing to leaf node via internal nodes");
-        exit(EXIT_FAILURE);
+        return internal_node_find(table, table->root_page_num, key_to_insert);
     }
 }
 
